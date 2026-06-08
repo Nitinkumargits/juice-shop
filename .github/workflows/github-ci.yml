@@ -3,7 +3,7 @@ name: Juice Shop CI/CD
 on:
   push:
     branches:
-      - main
+      - master
 
 env:
   IMAGE_NAME: nitinkdocker/juice-shop
