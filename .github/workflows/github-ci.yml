@@ -39,9 +39,9 @@ jobs:
           fetch-depth: 0 # full history so Gitleaks can scan every commit, not just the latest
 
       - name: Run Gitleaks Secret Scan
+        continue-on-error: true   # report any leaks but don't fail the pipeline
         run: |
           docker run --rm -v "${{ github.workspace }}:/path" zricethezav/gitleaks:latest detect --source="/path" --verbose
-      -allow-failure: true # Don't fail the workflow if Gitleaks finds secrets, but it will be reported in the logs
 
   build:
     needs: [gitleaks]
