@@ -44,8 +44,21 @@ jobs:
         run: |
           docker run --rm -v "${{ github.workspace }}:/path" zricethezav/gitleaks:latest detect --source="/path" --verbose
 
-  build:
+  njsscan:
     needs: [gitleaks]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Run njsscan SAST
+        continue-on-error: true # report findings but don't fail the pipeline
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/src" opensecurity/njsscan:latest /src
+
+  build:
+    needs: [njsscan]
     runs-on: ubuntu-latest
 
     steps:
