@@ -10,7 +10,7 @@ env:
   IMAGE_TAG: juice-shop-1.1
 
 jobs:
-  test:
+  cache:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,9 +21,40 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: "npm"
+
+      - name: Cache node_modules
+        id: npm-cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
 
       - name: Install Dependencies
+        if: steps.npm-cache.outputs.cache-hit != 'true' # only install when the lockfile changed
+        run: npm ci
+
+  test:
+    needs: [cache]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Restore node_modules
+        id: npm-cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Dependencies
+        if: steps.npm-cache.outputs.cache-hit != 'true' # fallback when cache missed
         run: npm ci
 
       - name: Run Tests
@@ -47,18 +78,32 @@ jobs:
   njsscan:
     needs: [gitleaks]
     runs-on: ubuntu-latest
+    continue-on-error: true # job fails on findings but the pipeline keeps going
 
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
       - name: Run njsscan SAST
-        continue-on-error: true # report findings but don't fail the pipeline
         run: |
-          docker run --rm -v "${{ github.workspace }}:/src" opensecurity/njsscan:latest /src
+          docker run --rm -v "${{ github.workspace }}:/src" opensecurity/njsscan:latest --exit-warning /src
+
+  semgrep:
+    needs: [njsscan]
+    runs-on: ubuntu-latest
+    continue-on-error: true # job fails on findings but the pipeline keeps going
+    container:
+      image: semgrep/semgrep:latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep SAST
+        run: semgrep scan --config auto --error
 
   build:
-    needs: [njsscan]
+    needs: [gitleaks, njsscan, semgrep]
     runs-on: ubuntu-latest
 
     steps:
