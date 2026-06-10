@@ -61,7 +61,7 @@ jobs:
         run: npm test
 
   gitleaks:
-    needs: [test]
+    needs: [cache]
     runs-on: ubuntu-latest
 
     steps:
@@ -76,7 +76,7 @@ jobs:
           docker run --rm -v "${{ github.workspace }}:/path" zricethezav/gitleaks:latest detect --source="/path" --verbose
 
   njsscan:
-    needs: [gitleaks]
+    needs: [cache]
     runs-on: ubuntu-latest
     continue-on-error: true # job fails on findings but the pipeline keeps going
 
@@ -89,7 +89,7 @@ jobs:
           docker run --rm -v "${{ github.workspace }}:/src" opensecurity/njsscan:latest --exit-warning /src
 
   semgrep:
-    needs: [njsscan]
+    needs: [cache]
     runs-on: ubuntu-latest
     continue-on-error: true # job fails on findings but the pipeline keeps going
     container:
@@ -103,7 +103,7 @@ jobs:
         run: semgrep scan --config auto --error
 
   build:
-    needs: [gitleaks, njsscan, semgrep]
+    needs: [test, gitleaks, njsscan, semgrep]
     runs-on: ubuntu-latest
 
     steps:
