@@ -99,14 +99,14 @@ jobs:
         continue-on-error: true # surface findings but keep the job's later steps running
         run: |
           docker run --rm -v "${{ github.workspace }}:/src" opensecurity/njsscan:latest \
-            --json -o /src/njsscan-report.json --exit-warning /src
+            --sarif -o /src/njsscan-report.sarif --exit-warning /src
 
       - name: Upload njsscan Report
         if: always() # publish the report even when the scan flags findings
         uses: actions/upload-artifact@v4
         with:
           name: njsscan-report
-          path: njsscan-report.json
+          path: njsscan-report.sarif
 
   semgrep:
     needs: [cache]

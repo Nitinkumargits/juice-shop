@@ -10,7 +10,7 @@ ENGAGEMENT_ID = os.environ.get('DEFECTDOJO_ENGAGEMENT_ID', '24')
 # scan_type -> report file produced by the CI scan jobs.
 REPORTS = {
     'Gitleaks Scan': 'reports/gitleaks-report/gitleaks-report.json',
-    'njsscan Scan': 'reports/njsscan-report/njsscan-report.json',
+    'SARIF': 'reports/njsscan-report/njsscan-report.sarif',
     'Semgrep JSON Report': 'reports/semgrep-report/semgrep-report.json',
 }
 
