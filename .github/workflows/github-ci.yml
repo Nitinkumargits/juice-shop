@@ -73,7 +73,18 @@ jobs:
       - name: Run Gitleaks Secret Scan
         continue-on-error: true # report any leaks but don't fail the pipeline
         run: |
-          docker run --rm -v "${{ github.workspace }}:/path" zricethezav/gitleaks:latest detect --source="/path" --verbose
+          docker run --rm -v "${{ github.workspace }}:/path" zricethezav/gitleaks:latest detect \
+            --source="/path" \
+            --report-format json \
+            --report-path "/path/gitleaks-report.json" \
+            --verbose
+
+      - name: Upload Gitleaks Report
+        if: always() # publish the report even when the scan step finds leaks
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: gitleaks-report.json
 
   njsscan:
     needs: [cache]
@@ -85,8 +96,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run njsscan SAST
+        continue-on-error: true # surface findings but keep the job's later steps running
         run: |
-          docker run --rm -v "${{ github.workspace }}:/src" opensecurity/njsscan:latest --exit-warning /src
+          docker run --rm -v "${{ github.workspace }}:/src" opensecurity/njsscan:latest \
+            --json -o /src/njsscan-report.json --exit-warning /src
+
+      - name: Upload njsscan Report
+        if: always() # publish the report even when the scan flags findings
+        uses: actions/upload-artifact@v4
+        with:
+          name: njsscan-report
+          path: njsscan-report.json
 
   semgrep:
     needs: [cache]
@@ -100,7 +120,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Semgrep SAST
-        run: semgrep scan --config auto --error
+        continue-on-error: true # surface findings but keep the job's later steps running
+        run: semgrep scan --config auto --json --output semgrep-report.json --error
+
+      - name: Upload Semgrep Report
+        if: always() # publish the report even when the scan flags findings
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: semgrep-report.json
 
   build:
     needs: [test, gitleaks, njsscan, semgrep]
