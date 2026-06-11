@@ -1,6 +1,12 @@
 import os
 import sys
+import time
 import requests
+
+# Gateway/availability errors worth retrying (e.g. demo instance being refreshed).
+RETRY_STATUS = {502, 503, 504}
+MAX_RETRIES = 4
+BACKOFF_BASE = 3  # seconds; waits 3, 6, 12 between attempts
 
 # Credentials / target come from the environment so no secrets live in the repo.
 DEFECTDOJO_URL = os.environ.get('DEFECTDOJO_URL', 'https://demo.defectdojo.org')
@@ -36,15 +42,31 @@ def import_scan(scan_type, report_path):
     }
 
     print(f"Importing '{scan_type}' from {report_path} ...")
-    with open(report_path, 'rb') as fh:
-        response = requests.post(url, headers=headers, data=data, files={'file': fh})
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            with open(report_path, 'rb') as fh:
+                response = requests.post(
+                    url, headers=headers, data=data, files={'file': fh}, timeout=60
+                )
+        except requests.exceptions.RequestException as exc:
+            status, body = None, str(exc)
+        else:
+            if response.status_code == 201:
+                print(f"  uploaded '{scan_type}' successfully!")
+                return True
+            status, body = response.status_code, response.text
 
-    if response.status_code == 201:
-        print(f"  uploaded '{scan_type}' successfully!")
-        return True
+        retryable = status in RETRY_STATUS or status is None
+        if retryable and attempt < MAX_RETRIES:
+            wait = BACKOFF_BASE * (2 ** (attempt - 1))
+            print(f"  transient error (status={status}) on attempt {attempt}/{MAX_RETRIES}; "
+                  f'retrying in {wait}s ...')
+            time.sleep(wait)
+            continue
 
-    print(f"  failed to upload '{scan_type}'. "
-          f'Status code: {response.status_code}, Response: {response.text}')
+        print(f"  failed to upload '{scan_type}'. Status code: {status}, Response: {body}")
+        return False
+
     return False
 
 
