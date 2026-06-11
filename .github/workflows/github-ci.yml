@@ -130,6 +130,35 @@ jobs:
           name: semgrep-report
           path: semgrep-report.json
 
+  upload_report:
+    needs: [gitleaks, njsscan, semgrep]
+    runs-on: ubuntu-latest
+    if: always() # still upload whatever reports were produced, even if a scan job failed
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download Scan Reports
+        uses: actions/download-artifact@v4
+        with:
+          path: reports # each artifact lands in reports/<artifact-name>/
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Import Reports into DefectDojo
+        env:
+          DEFECTDOJO_URL: ${{ secrets.DEFECTDOJO_URL }} # e.g. https://demo.defectdojo.org
+          DEFECTDOJO_API_KEY: ${{ secrets.DEFECTDOJO_API_KEY }}
+          DEFECTDOJO_ENGAGEMENT_ID: ${{ secrets.DEFECTDOJO_ENGAGEMENT_ID }}
+        run: python uploads-python.py
+
   build:
     needs: [test, gitleaks, njsscan, semgrep]
     runs-on: ubuntu-latest
