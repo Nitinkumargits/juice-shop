@@ -169,7 +169,7 @@ jobs:
           path: retirejs-report.json
 
   upload_report:
-    needs: [gitleaks, njsscan, semgrep, retire]
+    needs: [test, gitleaks, njsscan, semgrep, retire]
     runs-on: ubuntu-latest
     if: always() # still upload whatever reports were produced, even if a scan job failed
 
