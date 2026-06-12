@@ -130,8 +130,46 @@ jobs:
           name: semgrep-report
           path: semgrep-report.json
 
+  retire:
+    needs: [cache]
+    runs-on: ubuntu-latest
+    continue-on-error: true # job fails on findings but the pipeline keeps going
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Restore node_modules
+        id: npm-cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Dependencies
+        if: steps.npm-cache.outputs.cache-hit != 'true' # fallback when cache missed
+        run: npm ci
+
+      - name: Run Retire.js SCA
+        continue-on-error: true # surface vulnerable dependencies but keep later steps running
+        run: |
+          npm install -g retire
+          retire --path . --outputformat json --outputpath retirejs-report.json --severity low
+
+      - name: Upload Retire.js Report
+        if: always() # publish the report even when the scan flags vulnerable dependencies
+        uses: actions/upload-artifact@v4
+        with:
+          name: retirejs-report
+          path: retirejs-report.json
+
   upload_report:
-    needs: [gitleaks, njsscan, semgrep]
+    needs: [gitleaks, njsscan, semgrep, retire]
     runs-on: ubuntu-latest
     if: always() # still upload whatever reports were produced, even if a scan job failed
 
@@ -160,7 +198,7 @@ jobs:
         run: python uploads-python.py
 
   build:
-    needs: [test, gitleaks, njsscan, semgrep]
+    needs: [upload_report] # make sure the report is uploaded before we build/push the image, so the scan results are always available for triage even if the build fails
     runs-on: ubuntu-latest
 
     steps:

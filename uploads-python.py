@@ -11,13 +11,14 @@ BACKOFF_BASE = 3  # seconds; waits 3, 6, 12 between attempts
 # Credentials / target come from the environment so no secrets live in the repo.
 DEFECTDOJO_URL = os.environ.get('DEFECTDOJO_URL', 'https://demo.defectdojo.org')
 DEFECTDOJO_API_KEY = os.environ['DEFECTDOJO_API_KEY']
-ENGAGEMENT_ID = os.environ.get('DEFECTDOJO_ENGAGEMENT_ID', '24')
+ENGAGEMENT_ID = os.environ.get('DEFECTDOJO_ENGAGEMENT_ID', '14')
 
 # scan_type -> report file produced by the CI scan jobs.
 REPORTS = {
     'Gitleaks Scan': 'reports/gitleaks-report/gitleaks-report.json',
     'SARIF': 'reports/njsscan-report/njsscan-report.sarif',
     'Semgrep JSON Report': 'reports/semgrep-report/semgrep-report.json',
+    'Retire.js Scan': 'reports/retirejs-report/retirejs-report.json',
 }
 
 headers = {
