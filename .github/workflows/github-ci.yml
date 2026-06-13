@@ -85,6 +85,7 @@ jobs:
         with:
           name: gitleaks-report
           path: gitleaks-report.json
+          if-no-files-found: error # fail the step (and surface it) if the scan wrote no report
 
   njsscan:
     needs: [cache]
@@ -107,6 +108,7 @@ jobs:
         with:
           name: njsscan-report
           path: njsscan-report.sarif
+          if-no-files-found: error # fail the step (and surface it) if the scan wrote no report
 
   semgrep:
     needs: [cache]
@@ -129,6 +131,7 @@ jobs:
         with:
           name: semgrep-report
           path: semgrep-report.json
+          if-no-files-found: error # fail the step (and surface it) if the scan wrote no report
 
   retire:
     needs: [cache]
@@ -167,6 +170,7 @@ jobs:
         with:
           name: retirejs-report
           path: retirejs-report.json
+          if-no-files-found: error # fail the step (and surface it) if the scan wrote no report
 
   upload_report:
     needs: [test, gitleaks, njsscan, semgrep, retire]
