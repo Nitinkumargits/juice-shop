@@ -226,3 +226,27 @@ jobs:
           tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  trivy:
+    needs: [build] # scan the image only after it has been built and pushed
+    runs-on: ubuntu-latest
+    continue-on-error: true # job fails on findings but the pipeline keeps going
+
+    steps:
+      - name: Run Trivy Image Scan
+        continue-on-error: true # surface image vulnerabilities but keep later steps running
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/report" aquasec/trivy:latest image \
+            --format json \
+            --output /report/trivy-image-report.json \
+            --severity CRITICAL,HIGH,MEDIUM,LOW \
+            --vuln-type os,library \
+            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+
+      - name: Upload Trivy Report
+        if: always() # publish the report even when the scan flags vulnerabilities
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-image-report
+          path: trivy-image-report.json
+          if-no-files-found: error # fail the step (and surface it) if the scan wrote no report
