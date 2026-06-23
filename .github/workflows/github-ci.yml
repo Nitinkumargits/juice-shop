@@ -172,36 +172,6 @@ jobs:
           path: retirejs-report.json
           if-no-files-found: error # fail the step (and surface it) if the scan wrote no report
 
-  upload_report:
-    needs: [test, gitleaks, njsscan, semgrep, retire]
-    runs-on: ubuntu-latest
-    continue-on-error: true # job fails on upload errors but the pipeline keeps going
-    if: false # bypassed for now — skip importing reports into DefectDojo
-
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Download Scan Reports
-        uses: actions/download-artifact@v4
-        with:
-          path: reports # each artifact lands in reports/<artifact-name>/
-
-      - name: Install requests
-        run: pip install requests
-
-      - name: Import Reports into DefectDojo
-        env:
-          DEFECTDOJO_URL: ${{ secrets.DEFECTDOJO_URL }} # e.g. https://demo.defectdojo.org
-          DEFECTDOJO_API_KEY: ${{ secrets.DEFECTDOJO_API_KEY }}
-          DEFECTDOJO_ENGAGEMENT_ID: ${{ secrets.DEFECTDOJO_ENGAGEMENT_ID }}
-        run: python uploads-python.py
-
   build:
     needs: [test, gitleaks, njsscan, semgrep, retire] # upload_report is bypassed, so depend on the scan jobs directly
     runs-on: ubuntu-latest
@@ -261,7 +231,7 @@ jobs:
           echo "========================================================="
           echo "Severity counts:"
           for sev in CRITICAL HIGH MEDIUM LOW; do
-            count=$(grep -o "\"Severity\":\"$sev\"" trivy-image-report.json | wc -l | tr -d ' ')
+            count=$(grep -oE "\"Severity\": ?\"$sev\"" trivy-image-report.json | wc -l | tr -d ' ')
             echo "  $sev: $count"
           done
 
@@ -272,3 +242,33 @@ jobs:
           name: trivy-image-report
           path: trivy-image-report.json
           if-no-files-found: error # fail the step (and surface it) if the scan wrote no report
+
+  upload_report:
+    needs: [test, gitleaks, njsscan, semgrep, retire, trivy]
+    runs-on: ubuntu-latest
+    continue-on-error: true # job fails on upload errors but the pipeline keeps going
+    if: false # bypassed for now — skip importing reports into DefectDojo
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download Scan Reports
+        uses: actions/download-artifact@v4
+        with:
+          path: reports # each artifact lands in reports/<artifact-name>/
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Import Reports into DefectDojo
+        env:
+          DEFECTDOJO_URL: ${{ secrets.DEFECTDOJO_URL }} # e.g. https://demo.defectdojo.org
+          DEFECTDOJO_API_KEY: ${{ secrets.DEFECTDOJO_API_KEY }}
+          DEFECTDOJO_ENGAGEMENT_ID: ${{ secrets.DEFECTDOJO_ENGAGEMENT_ID }}
+        run: python uploads-python.py
