@@ -29,24 +29,9 @@ jobs:
           path: node_modules
           key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
 
-      - name: Log Cache Status
-        run: |
-          echo "::group::Cache status"
-          if [ "${{ steps.npm-cache.outputs.cache-hit }}" == "true" ]; then
-            echo "✅ node_modules cache HIT — dependencies restored from cache"
-          else
-            echo "⚠️ node_modules cache MISS — dependencies will be installed"
-          fi
-          echo "::endgroup::"
-
       - name: Install Dependencies
         if: steps.npm-cache.outputs.cache-hit != 'true' # only install when the lockfile changed
-        run: |
-          echo "📦 Installing dependencies with 'npm ci' on $GITHUB_REPOSITORY @ $GITHUB_SHA"
-          echo "::group::npm ci output"
-          npm ci
-          echo "::endgroup::"
-          echo "::notice title=Cache::Dependencies installed and cached"
+        run: npm ci
 
   test:
     needs: [cache]
@@ -73,23 +58,7 @@ jobs:
         run: npm ci
 
       - name: Run Tests
-        run: |
-          echo "🧪 Starting test suite on $GITHUB_REPOSITORY @ $GITHUB_SHA"
-          echo "::group::npm test output"
-          set +e
-          npm test
-          status=$?
-          set -e
-          echo "::endgroup::"
-          {
-            echo "### 🧪 Test Suite"
-            if [ "$status" -eq 0 ]; then
-              echo "- Status: ✅ passed"
-            else
-              echo "- Status: ❌ failed"
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit $status
+        run: npm test
 
   gitleaks:
     needs: [cache]
@@ -104,32 +73,11 @@ jobs:
       - name: Run Gitleaks Secret Scan
         continue-on-error: true # report any leaks but don't fail the pipeline
         run: |
-          echo "🔍 Starting Gitleaks secret scan on $GITHUB_REPOSITORY @ $GITHUB_SHA"
-          echo "::group::Gitleaks output"
-          set +e
           docker run --rm -v "${{ github.workspace }}:/path" zricethezav/gitleaks:latest detect \
             --source="/path" \
             --report-format json \
             --report-path "/path/gitleaks-report.json" \
             --verbose
-          status=$?
-          set -e
-          echo "::endgroup::"
-          findings="unknown"
-          if [ -f gitleaks-report.json ]; then
-            findings=$(grep -o '"RuleID"' gitleaks-report.json | wc -l | tr -d ' ')
-          fi
-          {
-            echo "### 🔑 Gitleaks Secret Scan"
-            echo "- Status: completed (exit $status)"
-            echo "- Leaks found: $findings"
-            echo "- Report: gitleaks-report.json"
-          } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$findings" != "0" ] && [ "$findings" != "unknown" ]; then
-            echo "::warning title=Gitleaks::$findings potential secret(s) detected — see gitleaks-report artifact"
-          else
-            echo "::notice title=Gitleaks::Scan finished, report uploaded as artifact"
-          fi
 
       - name: Upload Gitleaks Report
         if: always() # publish the report even when the scan step finds leaks
@@ -151,25 +99,8 @@ jobs:
       - name: Run njsscan SAST
         continue-on-error: true # surface findings but keep the job's later steps running
         run: |
-          echo "🔍 Starting njsscan SAST on $GITHUB_REPOSITORY @ $GITHUB_SHA"
-          echo "::group::njsscan output"
-          set +e
           docker run --rm -v "${{ github.workspace }}:/src" opensecurity/njsscan:latest \
             --sarif -o /src/njsscan-report.sarif --exit-warning /src
-          status=$?
-          set -e
-          echo "::endgroup::"
-          findings="unknown"
-          if [ -f njsscan-report.sarif ]; then
-            findings=$(grep -o '"ruleId"' njsscan-report.sarif | wc -l | tr -d ' ')
-          fi
-          {
-            echo "### 🛡️ njsscan SAST"
-            echo "- Status: completed (exit $status)"
-            echo "- Findings: $findings"
-            echo "- Report: njsscan-report.sarif"
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "::notice title=njsscan::Scan finished ($findings findings), report uploaded as artifact"
 
       - name: Upload njsscan Report
         if: always() # publish the report even when the scan flags findings
@@ -192,25 +123,7 @@ jobs:
 
       - name: Run Semgrep SAST
         continue-on-error: true # surface findings but keep the job's later steps running
-        run: |
-          echo "🔍 Starting Semgrep SAST on $GITHUB_REPOSITORY @ $GITHUB_SHA"
-          echo "::group::Semgrep output"
-          set +e
-          semgrep scan --config auto --json --output semgrep-report.json --error
-          status=$?
-          set -e
-          echo "::endgroup::"
-          findings="unknown"
-          if [ -f semgrep-report.json ]; then
-            findings=$(grep -o '"check_id"' semgrep-report.json | wc -l | tr -d ' ')
-          fi
-          {
-            echo "### 🔎 Semgrep SAST"
-            echo "- Status: completed (exit $status)"
-            echo "- Findings: $findings"
-            echo "- Report: semgrep-report.json"
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "::notice title=Semgrep::Scan finished ($findings findings), report uploaded as artifact"
+        run: semgrep scan --config auto --json --output semgrep-report.json --error
 
       - name: Upload Semgrep Report
         if: always() # publish the report even when the scan flags findings
@@ -248,31 +161,8 @@ jobs:
       - name: Run Retire.js SCA
         continue-on-error: true # surface vulnerable dependencies but keep later steps running
         run: |
-          echo "🔍 Starting Retire.js SCA on $GITHUB_REPOSITORY @ $GITHUB_SHA"
-          echo "::group::Retire.js setup"
           npm install -g retire
-          echo "::endgroup::"
-          echo "::group::Retire.js output"
-          set +e
           retire --path . --outputformat json --outputpath retirejs-report.json --severity low
-          status=$?
-          set -e
-          echo "::endgroup::"
-          findings="unknown"
-          if [ -f retirejs-report.json ]; then
-            findings=$(grep -o '"component"' retirejs-report.json | wc -l | tr -d ' ')
-          fi
-          {
-            echo "### 📦 Retire.js SCA"
-            echo "- Status: completed (exit $status)"
-            echo "- Vulnerable component hits: $findings"
-            echo "- Report: retirejs-report.json"
-          } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$findings" != "0" ] && [ "$findings" != "unknown" ]; then
-            echo "::warning title=Retire.js::$findings vulnerable dependency finding(s) — see retirejs-report artifact"
-          else
-            echo "::notice title=Retire.js::Scan finished, report uploaded as artifact"
-          fi
 
       - name: Upload Retire.js Report
         if: always() # publish the report even when the scan flags vulnerable dependencies
@@ -320,12 +210,6 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Log Build Target
-        run: |
-          echo "::group::Build target"
-          echo "🐳 Building image ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} from $GITHUB_REPOSITORY @ $GITHUB_SHA"
-          echo "::endgroup::"
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -344,15 +228,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Log Build Result
-        run: |
-          {
-            echo "### 🐳 Docker Build & Push"
-            echo "- Image: \`${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}\`"
-            echo "- Status: ✅ pushed to Docker Hub"
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "::notice title=Build::Pushed ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
-
   trivy:
     needs: [build] # scan the image only after it has been built and pushed
     runs-on: ubuntu-latest
@@ -362,35 +237,33 @@ jobs:
       - name: Run Trivy Image Scan
         continue-on-error: true # surface image vulnerabilities but keep later steps running
         run: |
-          echo "🔍 Starting Trivy image scan of ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
-          echo "Severities: CRITICAL,HIGH,MEDIUM,LOW | Types: os,library"
-          echo "::group::Trivy output"
-          set +e
           docker run --rm -v "${{ github.workspace }}:/report" aquasec/trivy:latest image \
             --format json \
             --output /report/trivy-image-report.json \
             --severity CRITICAL,HIGH,MEDIUM,LOW \
             --vuln-type os,library \
             ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          status=$?
-          set -e
-          echo "::endgroup::"
-          findings="unknown"
-          if [ -f trivy-image-report.json ]; then
-            findings=$(grep -o '"VulnerabilityID"' trivy-image-report.json | wc -l | tr -d ' ')
+
+      - name: Display Trivy Report
+        if: always() # show the results in the log even when the scan flagged vulnerabilities
+        continue-on-error: true # rendering must never fail the pipeline
+        run: |
+          if [ ! -f trivy-image-report.json ]; then
+            echo "::warning title=Trivy::No report file found to display"
+            exit 0
           fi
-          {
-            echo "### 🐳 Trivy Image Scan"
-            echo "- Image: \`${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}\`"
-            echo "- Status: completed (exit $status)"
-            echo "- Vulnerabilities found: $findings"
-            echo "- Report: trivy-image-report.json"
-          } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$findings" != "0" ] && [ "$findings" != "unknown" ]; then
-            echo "::warning title=Trivy::$findings image vulnerability finding(s) — see trivy-image-report artifact"
-          else
-            echo "::notice title=Trivy::Scan finished, report uploaded as artifact"
-          fi
+          echo "================ Trivy Image Scan Results ================"
+          echo "Image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          # Render the JSON report as a readable table: target, package, severity,
+          # vulnerability ID, installed/fixed versions, and title.
+          docker run --rm -v "${{ github.workspace }}:/report" aquasec/trivy:latest convert \
+            --format table /report/trivy-image-report.json
+          echo "========================================================="
+          echo "Severity counts:"
+          for sev in CRITICAL HIGH MEDIUM LOW; do
+            count=$(grep -o "\"Severity\":\"$sev\"" trivy-image-report.json | wc -l | tr -d ' ')
+            echo "  $sev: $count"
+          done
 
       - name: Upload Trivy Report
         if: always() # publish the report even when the scan flags vulnerabilities
